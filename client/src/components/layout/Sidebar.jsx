@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -55,8 +55,6 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const hideBottomBar = location.pathname === "/chat";
 
   const handleLogout = () => {
     logout();
@@ -153,7 +151,6 @@ export default function Sidebar() {
       </AnimatePresence>
 
       {/* Mobile bottom tab bar */}
-      {!hideBottomBar && (
       <nav className="fixed inset-x-0 bottom-0 z-30 flex h-16 items-center justify-around border-t border-white/10 bg-void/90 px-2 backdrop-blur-xl lg:hidden">
         {NAV_ITEMS.map(({ label, path, icon: Icon }) => (
           <NavLink
@@ -174,7 +171,6 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      )}
     </>
   );
 }
