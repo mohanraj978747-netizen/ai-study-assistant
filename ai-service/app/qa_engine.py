@@ -60,7 +60,10 @@ def chat(payload: ChatRequest):
     except Exception as exc:
         import traceback
         traceback.print_exc()
-        print("Gemini Error:", exc)
+        print("================================")
+        print(type(exc))
+        print(exc)
+        print("================================")
         raise HTTPException(status_code=502, detail=str(exc))
 
     reply = (response.text or "").strip()
