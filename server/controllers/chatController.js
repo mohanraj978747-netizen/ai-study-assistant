@@ -59,7 +59,7 @@ export async function sendMessage(req, res, next) {
     conversation.messages.push({ role: 'user', content });
     if (
       conversation.title === 'New chat' &&
-      conversation.message.filter((m) => m.role === 'user').length === 1
+      conversation.messages.filter((m) => m.role === 'user').length === 1
     ) {
       conversation.title = content.trim().slice(0,60);
     }
