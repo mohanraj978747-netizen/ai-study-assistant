@@ -24,6 +24,16 @@ export async function summarizeText(text) {
 
 export async function askTutor(message, history = []) {
   const { data } = await aiClient.post('/chat', { message, history });
+  try {
+  const { data } = await aiClient.post('/chat', { message, history });
+  console.log("AI Response:", data);
+  return data.reply;
+} catch (err) {
+  console.log("Status:", err.response?.status);
+  console.log("Response:", err.response?.data);
+  console.log("Message:", err.message);
+  throw err;
+}
   return data?.reply ?? data?.message ?? data;
 }
 
