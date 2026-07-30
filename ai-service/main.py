@@ -26,7 +26,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
+@app.get("/")
+def root():
+    return {
+        "message": "Nova AI Service is running!",
+        "status": "ok",
+        "docs": "/docs",
+        "health": "/health"
+    }
 @app.get("/health")
 def health():
     return {"status": "ok"}
