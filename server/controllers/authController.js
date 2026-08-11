@@ -18,7 +18,7 @@ export async function register(req, res, next) {
     }
 
     // Normalize email
-    const normalizedEmail = email.toLowerCase();
+    const normalizedEmail = email.toLowerCase().trim();
 
     // Check if account already exists
     const existing = await User.findOne({
@@ -38,9 +38,13 @@ export async function register(req, res, next) {
     });
 
     // Send welcome email
-    // Email failure should NOT prevent account creation.
+    // Email failure will NOT prevent account creation.
     try {
-      await sendWelcomeEmail(user.name, user.email);
+      await sendWelcomeEmail({
+        name: user.name,
+        email: user.email,
+      });
+
       console.log(`✅ Welcome email sent to ${user.email}`);
     } catch (emailError) {
       console.error(
@@ -61,12 +65,10 @@ export async function register(req, res, next) {
         email: user.email,
       },
     });
-
   } catch (err) {
     next(err);
   }
 }
-
 
 export async function login(req, res, next) {
   try {
@@ -78,9 +80,12 @@ export async function login(req, res, next) {
       throw new Error('Email and password are required');
     }
 
+    // Normalize email
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Find user
     const user = await User.findOne({
-      email: email.toLowerCase(),
+      email: normalizedEmail,
     });
 
     // Check credentials
@@ -101,12 +106,10 @@ export async function login(req, res, next) {
         email: user.email,
       },
     });
-
   } catch (err) {
     next(err);
   }
 }
-
 
 export async function getMe(req, res) {
   res.json({
