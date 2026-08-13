@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 # ============================================================
-# NOVA IDENTITY / SYSTEM INSTRUCTION
+# NOVA SYSTEM INSTRUCTION
 # ============================================================
 
 SYSTEM_INSTRUCTION = (
@@ -41,17 +41,26 @@ SYSTEM_INSTRUCTION = (
     "Do not falsely claim that Mohan Raj trained the Gemini "
     "foundation model. "
 
+    # ========================================================
+    # WEB SEARCH
+    # ========================================================
+
     "WEB SEARCH IMPLEMENTATION: "
+
     "This application has a web-search feature powered by Tavily. "
+
     "When the application determines that a question requires "
     "current or recent information, it calls the Tavily search "
     "service to retrieve web results. "
-    "Those Tavily results are then provided to you, Gemini, "
-    "so that you can analyze and synthesize the information. "
 
-    "Tavily is the web-search/retrieval service used by this "
-    "application. Gemini is the AI model that processes the "
-    "retrieved information and generates the final response. "
+    "Those Tavily results are then provided to you so that you "
+    "can analyze and synthesize the information. "
+
+    "Tavily is the web-search and retrieval service used by "
+    "this application. "
+
+    "Gemini is the AI model that processes the retrieved "
+    "information and generates the final response. "
 
     "If the student asks 'Do you use Tavily?', answer YES. "
     "Say that your application's web-search capability uses Tavily. "
@@ -60,15 +69,25 @@ SYSTEM_INSTRUCTION = (
     "do not claim that you use Google, Bing, Yahoo, Brave, "
     "or another search engine unless that service is actually "
     "configured in the application. "
+
     "Explain that Tavily is the search/retrieval service used "
     "by this application. "
 
-    "Do not claim that you use Google's search tools or Gemini's "
-    "built-in search tools for this application's web search. "
+    "Do not claim that you use Google's search tools or "
+    "Gemini's built-in search tools for this application's "
+    "web search. "
 
     "The websites appearing in search results are sources "
     "retrieved by Tavily. They are not necessarily the search "
     "engine or search service being used. "
+
+    "When web search results are provided, use them as "
+    "current information and do not pretend that you searched "
+    "the web yourself. "
+
+    # ========================================================
+    # STUDY ASSISTANT
+    # ========================================================
 
     "You are designed to help students with learning, "
     "academic explanations, note understanding, quizzes, "
@@ -78,27 +97,56 @@ SYSTEM_INSTRUCTION = (
     "on ANY topic they ask about, not only material they "
     "have uploaded. "
 
-    "When web search results are provided, use them as "
-    "current information and do not pretend that you searched "
-    "the web yourself. "
-
     "Explain concepts step by step when it helps understanding, "
     "and keep answers focused rather than unnecessarily long. "
 
     "Be friendly, encouraging, and helpful."
 )
 
+
 # ============================================================
-# CONVERT CHAT HISTORY TO GEMINI FORMAT
+# REQUEST MODELS
+# ============================================================
+
+class HistoryTurn(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: Optional[List[HistoryTurn]] = None
+
+
+# ============================================================
+# RESPONSE MODEL
+# ============================================================
+
+class Source(BaseModel):
+    title: str
+    url: str
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    sources: List[Source] = []
+
+
+# ============================================================
+# GEMINI HISTORY CONVERSION
 # ============================================================
 
 def _to_gemini_contents(history, message):
+
     contents = []
 
     for turn in history or []:
 
-        # Gemini uses 'model' instead of 'assistant'
-        role = "model" if turn.role == "assistant" else "user"
+        role = (
+            "model"
+            if turn.role == "assistant"
+            else "user"
+        )
 
         contents.append(
             types.Content(
@@ -111,7 +159,7 @@ def _to_gemini_contents(history, message):
             )
         )
 
-    # Add current student message
+    # Current user message
     contents.append(
         types.Content(
             role="user",
@@ -127,7 +175,7 @@ def _to_gemini_contents(history, message):
 
 
 # ============================================================
-# DECIDE WHETHER WEB SEARCH IS NEEDED
+# DETERMINE WHETHER WEB SEARCH IS NEEDED
 # ============================================================
 
 def should_search_web(message: str) -> bool:
@@ -140,11 +188,26 @@ def should_search_web(message: str) -> bool:
         "news",
         "this week",
         "this month",
+        "this year",
         "2026",
         "price",
+        "prices",
         "version",
         "weather",
         "update",
+        "updates",
+        "release",
+        "released",
+        "new",
+        "now",
+        "currently",
+        "stock",
+        "score",
+        "live",
+        "ranking",
+        "rankings",
+        "schedule",
+        "event",
     ]
 
     message_lower = message.lower()
@@ -159,7 +222,10 @@ def should_search_web(message: str) -> bool:
 # CHAT ENDPOINT
 # ============================================================
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post(
+    "/chat",
+    response_model=ChatResponse
+)
 def chat(payload: ChatRequest):
 
     # --------------------------------------------------------
@@ -189,13 +255,18 @@ def chat(payload: ChatRequest):
         )
 
     # --------------------------------------------------------
-    # Web search
+    # WEB SEARCH
     # --------------------------------------------------------
 
     web_context = ""
     sources = []
 
     if should_search_web(payload.message):
+
+        print("=================================")
+        print("WEB SEARCH TRIGGERED")
+        print("Query:", payload.message)
+        print("=================================")
 
         try:
 
@@ -205,16 +276,20 @@ def chat(payload: ChatRequest):
 
                 web_context = (
                     "\n\n"
-                    "WEB SEARCH RESULTS:\n"
-                    "Use these sources to answer the student's "
-                    "question accurately.\n"
+                    "IMPORTANT: The following information was "
+                    "retrieved from the web using Tavily. "
+                    "Use it to answer the student's question. "
+                    "Do not say that you personally searched the web.\n\n"
                 )
 
-                for i, result in enumerate(results, 1):
+                for i, result in enumerate(
+                    results,
+                    start=1
+                ):
 
                     title = result.get(
                         "title",
-                        "Untitled source"
+                        ""
                     )
 
                     url = result.get(
@@ -228,33 +303,45 @@ def chat(payload: ChatRequest):
                     )
 
                     web_context += (
-                        f"\nSource {i}:\n"
+                        f"Source {i}:\n"
                         f"Title: {title}\n"
                         f"URL: {url}\n"
-                        f"Content: {content}\n"
+                        f"Content: {content}\n\n"
                     )
 
-                    # Save source for frontend
+                    # Return source information to frontend
                     if title and url:
 
                         sources.append(
-                            Source(
-                                title=title,
-                                url=url
-                            )
+                            {
+                                "title": title,
+                                "url": url
+                            }
                         )
+
+            else:
+
+                print("Tavily returned no results.")
 
         except Exception as exc:
 
-            print("================================")
-            print("Web search failed:")
+            print("=================================")
+            print("WEB SEARCH FAILED")
             print(type(exc))
             print(exc)
-            print("================================")
+            print("=================================")
 
-            # Don't completely break Nova if Tavily fails.
+            # Do not stop Nova completely if Tavily fails.
             web_context = ""
 
+    # --------------------------------------------------------
+    # Build message for Gemini
+    # --------------------------------------------------------
+
+    message_for_gemini = (
+        payload.message
+        + web_context
+    )
 
     # --------------------------------------------------------
     # Send request to Gemini
@@ -268,7 +355,7 @@ def chat(payload: ChatRequest):
 
             contents=_to_gemini_contents(
                 payload.history,
-                payload.message + web_context
+                message_for_gemini
             ),
 
             config=types.GenerateContentConfig(
@@ -283,6 +370,7 @@ def chat(payload: ChatRequest):
         traceback.print_exc()
 
         print("================================")
+        print("GEMINI ERROR")
         print(type(exc))
         print(exc)
         print("================================")
@@ -296,7 +384,13 @@ def chat(payload: ChatRequest):
     # Get Gemini response
     # --------------------------------------------------------
 
-    reply = (response.text or "").strip()
+    reply = (
+        response.text or ""
+    ).strip()
+
+    # --------------------------------------------------------
+    # Check empty response
+    # --------------------------------------------------------
 
     if not reply:
 
