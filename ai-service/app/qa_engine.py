@@ -5,6 +5,7 @@ from google.genai import types
 from pydantic import BaseModel
 
 from .gemini_client import GEMINI_MODEL, get_client
+from .web_search import search_web
 
 
 router = APIRouter()
@@ -48,6 +49,11 @@ SYSTEM_INSTRUCTION = (
     "on ANY topic they ask about, not only material they "
     "have uploaded. "
 
+    "When web search results are provided, use them to answer "
+    "questions that require current or recent information. "
+    "Do not invent facts that are not supported by the "
+    "provided search results. "
+
     "Explain concepts step by step when it helps understanding, "
     "and keep answers focused rather than unnecessarily long. "
 
@@ -61,7 +67,7 @@ SYSTEM_INSTRUCTION = (
 
 class HistoryTurn(BaseModel):
     role: str
-    # 'user' | 'assistant', as stored by the Node server
+    # 'user' | 'assistant'
     content: str
 
 
@@ -70,8 +76,14 @@ class ChatRequest(BaseModel):
     history: Optional[List[HistoryTurn]] = None
 
 
+class Source(BaseModel):
+    title: str
+    url: str
+
+
 class ChatResponse(BaseModel):
     reply: str
+    sources: List[Source] = []
 
 
 # ============================================================
@@ -82,8 +94,8 @@ def _to_gemini_contents(history, message):
     contents = []
 
     for turn in history or []:
-        # Gemini uses 'model' where the rest of this app
-        # says 'assistant'.
+
+        # Gemini uses 'model' instead of 'assistant'
         role = "model" if turn.role == "assistant" else "user"
 
         contents.append(
@@ -97,7 +109,7 @@ def _to_gemini_contents(history, message):
             )
         )
 
-    # Add the current student message
+    # Add current student message
     contents.append(
         types.Content(
             role="user",
@@ -113,43 +125,157 @@ def _to_gemini_contents(history, message):
 
 
 # ============================================================
+# DECIDE WHETHER WEB SEARCH IS NEEDED
+# ============================================================
+
+def should_search_web(message: str) -> bool:
+
+    keywords = [
+        "latest",
+        "today",
+        "current",
+        "recent",
+        "news",
+        "this week",
+        "this month",
+        "2026",
+        "price",
+        "version",
+        "weather",
+        "update",
+    ]
+
+    message_lower = message.lower()
+
+    return any(
+        keyword in message_lower
+        for keyword in keywords
+    )
+
+
+# ============================================================
 # CHAT ENDPOINT
 # ============================================================
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(payload: ChatRequest):
 
+    # --------------------------------------------------------
     # Validate message
+    # --------------------------------------------------------
+
     if not payload.message or not payload.message.strip():
+
         raise HTTPException(
             status_code=400,
             detail="message is required"
         )
 
+    # --------------------------------------------------------
     # Get Gemini client
+    # --------------------------------------------------------
+
     try:
+
         client = get_client()
 
     except RuntimeError as exc:
+
         raise HTTPException(
             status_code=500,
             detail=str(exc)
         )
 
+    # --------------------------------------------------------
+    # Web search
+    # --------------------------------------------------------
+
+    web_context = ""
+    sources = []
+
+    if should_search_web(payload.message):
+
+        try:
+
+            results = search_web(payload.message)
+
+            if results:
+
+                web_context = (
+                    "\n\n"
+                    "WEB SEARCH RESULTS:\n"
+                    "Use these sources to answer the student's "
+                    "question accurately.\n"
+                )
+
+                for i, result in enumerate(results, 1):
+
+                    title = result.get(
+                        "title",
+                        "Untitled source"
+                    )
+
+                    url = result.get(
+                        "url",
+                        ""
+                    )
+
+                    content = result.get(
+                        "content",
+                        ""
+                    )
+
+                    web_context += (
+                        f"\nSource {i}:\n"
+                        f"Title: {title}\n"
+                        f"URL: {url}\n"
+                        f"Content: {content}\n"
+                    )
+
+                    # Save source for frontend
+                    if title and url:
+
+                        sources.append(
+                            Source(
+                                title=title,
+                                url=url
+                            )
+                        )
+
+        except Exception as exc:
+
+            print("================================")
+            print("Web search failed:")
+            print(type(exc))
+            print(exc)
+            print("================================")
+
+            # Don't completely break Nova if Tavily fails.
+            web_context = ""
+
+
+    # --------------------------------------------------------
     # Send request to Gemini
+    # --------------------------------------------------------
+
     try:
+
         response = client.models.generate_content(
+
             model=GEMINI_MODEL,
+
             contents=_to_gemini_contents(
                 payload.history,
-                payload.message
+                payload.message + web_context
             ),
+
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION
             ),
         )
 
     except Exception as exc:
+
         import traceback
 
         traceback.print_exc()
@@ -164,14 +290,24 @@ def chat(payload: ChatRequest):
             detail=str(exc)
         )
 
+    # --------------------------------------------------------
     # Get Gemini response
+    # --------------------------------------------------------
+
     reply = (response.text or "").strip()
 
-    # Make sure Gemini actually returned something
     if not reply:
+
         raise HTTPException(
             status_code=502,
             detail="Gemini returned an empty reply"
         )
 
-    return ChatResponse(reply=reply)
+    # --------------------------------------------------------
+    # Return reply + sources
+    # --------------------------------------------------------
+
+    return ChatResponse(
+        reply=reply,
+        sources=sources
+    )

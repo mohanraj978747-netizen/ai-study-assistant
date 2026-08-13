@@ -39,7 +39,10 @@ export async function askTutor(message, history = []) {
     console.log("===== CHAT RESPONSE =====");
     console.log(data);
 
-    return data?.reply ?? data?.message ?? data;
+    return {
+      reply: data?.reply ?? data?.message ?? "",
+      sources: data?.sources ?? [],
+    };
   } catch (err) {
     console.error("===== CHAT ERROR =====");
     console.error("Status:", err.response?.status);
@@ -49,6 +52,8 @@ export async function askTutor(message, history = []) {
     throw err;
   }
 }
+
+
 
 export async function generateQuizQuestions({
   topic,
