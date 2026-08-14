@@ -2,21 +2,19 @@ import mongoose from 'mongoose';
 
 
 // ============================================================
-// SOURCE SCHEMA
+// WEB SOURCE SCHEMA
 // ============================================================
 
 const sourceSchema = new mongoose.Schema(
   {
     title: {
       type: String,
-      required: true,
-      trim: true,
+      default: 'Web source',
     },
 
     url: {
       type: String,
       required: true,
-      trim: true,
     },
   },
   {
@@ -42,7 +40,6 @@ const messageSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Web sources returned by Tavily
     sources: {
       type: [sourceSchema],
       default: [],
@@ -82,10 +79,6 @@ const chatHistorySchema = new mongoose.Schema(
   }
 );
 
-
-// ============================================================
-// MODEL
-// ============================================================
 
 export default mongoose.model(
   'ChatHistory',

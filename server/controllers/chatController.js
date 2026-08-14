@@ -3,7 +3,7 @@ import { askTutor } from '../utils/aiServiceClient.js';
 
 
 // ============================================================
-// GET ALL CONVERSATIONS
+// GET CONVERSATIONS
 // ============================================================
 
 export async function getConversations(req, res, next) {
@@ -14,7 +14,9 @@ export async function getConversations(req, res, next) {
       .select('title createdAt updatedAt')
       .sort({ updatedAt: -1 });
 
-    res.json({ conversations });
+    res.json({
+      conversations,
+    });
   } catch (err) {
     next(err);
   }
@@ -22,7 +24,7 @@ export async function getConversations(req, res, next) {
 
 
 // ============================================================
-// CREATE NEW CONVERSATION
+// CREATE CONVERSATION
 // ============================================================
 
 export async function createConversation(req, res, next) {
@@ -31,7 +33,11 @@ export async function createConversation(req, res, next) {
 
     const conversation = await ChatHistory.create({
       user: req.user._id,
-      title: title?.slice(0, 60) || 'New chat',
+
+      title:
+        title?.slice(0, 60) ||
+        'New chat',
+
       messages: [],
     });
 
@@ -50,14 +56,18 @@ export async function createConversation(req, res, next) {
 
 export async function getMessages(req, res, next) {
   try {
-    const conversation = await ChatHistory.findOne({
-      _id: req.params.id,
-      user: req.user._id,
-    });
+    const conversation =
+      await ChatHistory.findOne({
+        _id: req.params.id,
+        user: req.user._id,
+      });
 
     if (!conversation) {
       res.status(404);
-      throw new Error('Conversation not found');
+
+      throw new Error(
+        'Conversation not found'
+      );
     }
 
     res.json({
@@ -75,15 +85,20 @@ export async function getMessages(req, res, next) {
 
 export async function sendMessage(req, res, next) {
   try {
+
     const { content } = req.body;
 
     // --------------------------------------------------------
-    // Validate message
+    // Validate
     // --------------------------------------------------------
 
     if (!content?.trim()) {
+
       res.status(400);
-      throw new Error('Message content is required');
+
+      throw new Error(
+        'Message content is required'
+      );
     }
 
 
@@ -91,19 +106,24 @@ export async function sendMessage(req, res, next) {
     // Find conversation
     // --------------------------------------------------------
 
-    const conversation = await ChatHistory.findOne({
-      _id: req.params.id,
-      user: req.user._id,
-    });
+    const conversation =
+      await ChatHistory.findOne({
+        _id: req.params.id,
+        user: req.user._id,
+      });
 
     if (!conversation) {
+
       res.status(404);
-      throw new Error('Conversation not found');
+
+      throw new Error(
+        'Conversation not found'
+      );
     }
 
 
     // --------------------------------------------------------
-    // Save user's message
+    // Save user message
     // --------------------------------------------------------
 
     conversation.messages.push({
@@ -113,46 +133,58 @@ export async function sendMessage(req, res, next) {
 
 
     // --------------------------------------------------------
-    // Automatically create conversation title
+    // Update conversation title
     // --------------------------------------------------------
 
     if (
       conversation.title === 'New chat' &&
       conversation.messages.filter(
-        (message) => message.role === 'user'
+        (m) => m.role === 'user'
       ).length === 1
     ) {
-      conversation.title = content.trim().slice(0, 60);
+
+      conversation.title =
+        content
+          .trim()
+          .slice(0, 60);
     }
 
 
     // --------------------------------------------------------
-    // Prepare history for Nova
+    // Prepare history
     // --------------------------------------------------------
 
-    const history = conversation.messages
-      .slice(-10)
-      .map((message) => ({
-        role: message.role,
-        content: message.content,
-      }));
+    const history =
+      conversation.messages
+        .slice(-10)
+        .map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
 
 
     // --------------------------------------------------------
-    // Ask Nova
+    // Ask Nova / Gemini / Tavily
     // --------------------------------------------------------
 
     let tutorResponse;
 
     try {
-      tutorResponse = await askTutor(
-        content,
-        history
-      );
-    } catch (err) {
-      console.error('AI tutor call failed:', err.message);
 
-      // Save user's message even if AI fails
+      tutorResponse =
+        await askTutor(
+          content.trim(),
+          history
+        );
+
+    } catch (err) {
+
+      console.error(
+        'AI tutor call failed:',
+        err.message
+      );
+
+      // Save user message even if AI fails
       await conversation.save();
 
       res.status(502);
@@ -164,25 +196,30 @@ export async function sendMessage(req, res, next) {
 
 
     // --------------------------------------------------------
-    // Save Nova response + web sources
+    // Save assistant response + Tavily sources
     // --------------------------------------------------------
 
     conversation.messages.push({
       role: 'assistant',
-      content: tutorResponse.reply,
-      sources: tutorResponse.sources || [],
+
+      content:
+        tutorResponse.reply ||
+        'Sorry, I could not generate a response.',
+
+      sources:
+        tutorResponse.sources || [],
     });
 
 
     // --------------------------------------------------------
-    // Save conversation to MongoDB
+    // Save conversation
     // --------------------------------------------------------
 
     await conversation.save();
 
 
     // --------------------------------------------------------
-    // Get saved assistant message
+    // Return assistant message
     // --------------------------------------------------------
 
     const savedReply =
@@ -190,10 +227,6 @@ export async function sendMessage(req, res, next) {
         conversation.messages.length - 1
       ];
 
-
-    // --------------------------------------------------------
-    // Return response to React frontend
-    // --------------------------------------------------------
 
     res.json({
       message: savedReply,
@@ -209,8 +242,13 @@ export async function sendMessage(req, res, next) {
 // DELETE CONVERSATION
 // ============================================================
 
-export async function deleteConversation(req, res, next) {
+export async function deleteConversation(
+  req,
+  res,
+  next
+) {
   try {
+
     const conversation =
       await ChatHistory.findOneAndDelete({
         _id: req.params.id,
@@ -218,12 +256,17 @@ export async function deleteConversation(req, res, next) {
       });
 
     if (!conversation) {
+
       res.status(404);
-      throw new Error('Conversation not found');
+
+      throw new Error(
+        'Conversation not found'
+      );
     }
 
     res.json({
-      message: 'Conversation deleted',
+      message:
+        'Conversation deleted',
     });
 
   } catch (err) {

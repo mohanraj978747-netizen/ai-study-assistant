@@ -46,15 +46,14 @@ SYSTEM_INSTRUCTION = (
     # ========================================================
 
     "WEB SEARCH IMPLEMENTATION: "
-
     "This application has a web-search feature powered by Tavily. "
 
     "When the application determines that a question requires "
     "current or recent information, it calls the Tavily search "
     "service to retrieve web results. "
 
-    "Those Tavily results are then provided to you so that you "
-    "can analyze and synthesize the information. "
+    "Those Tavily results are provided to you so that you can "
+    "analyze and synthesize the information. "
 
     "Tavily is the web-search and retrieval service used by "
     "this application. "
@@ -63,15 +62,15 @@ SYSTEM_INSTRUCTION = (
     "information and generates the final response. "
 
     "If the student asks 'Do you use Tavily?', answer YES. "
-    "Say that your application's web-search capability uses Tavily. "
+    "Say that this application's web-search capability uses Tavily. "
 
     "If the student asks 'What search engine do you use?', "
     "do not claim that you use Google, Bing, Yahoo, Brave, "
     "or another search engine unless that service is actually "
     "configured in the application. "
 
-    "Explain that Tavily is the search/retrieval service used "
-    "by this application. "
+    "Explain that Tavily is the search and retrieval service "
+    "used by this application. "
 
     "Do not claim that you use Google's search tools or "
     "Gemini's built-in search tools for this application's "
@@ -86,7 +85,7 @@ SYSTEM_INSTRUCTION = (
     "the web yourself. "
 
     # ========================================================
-    # STUDY ASSISTANT
+    # GENERAL BEHAVIOR
     # ========================================================
 
     "You are designed to help students with learning, "
@@ -105,7 +104,7 @@ SYSTEM_INSTRUCTION = (
 
 
 # ============================================================
-# REQUEST MODELS
+# REQUEST / RESPONSE MODELS
 # ============================================================
 
 class HistoryTurn(BaseModel):
@@ -118,13 +117,9 @@ class ChatRequest(BaseModel):
     history: Optional[List[HistoryTurn]] = None
 
 
-# ============================================================
-# RESPONSE MODEL
-# ============================================================
-
 class Source(BaseModel):
-    title: str
-    url: str
+    title: str = ""
+    url: str = ""
 
 
 class ChatResponse(BaseModel):
@@ -133,20 +128,15 @@ class ChatResponse(BaseModel):
 
 
 # ============================================================
-# GEMINI HISTORY CONVERSION
+# CONVERT HISTORY TO GEMINI FORMAT
 # ============================================================
 
 def _to_gemini_contents(history, message):
-
     contents = []
 
     for turn in history or []:
 
-        role = (
-            "model"
-            if turn.role == "assistant"
-            else "user"
-        )
+        role = "model" if turn.role == "assistant" else "user"
 
         contents.append(
             types.Content(
@@ -159,7 +149,6 @@ def _to_gemini_contents(history, message):
             )
         )
 
-    # Current user message
     contents.append(
         types.Content(
             role="user",
@@ -175,7 +164,7 @@ def _to_gemini_contents(history, message):
 
 
 # ============================================================
-# DETERMINE WHETHER WEB SEARCH IS NEEDED
+# DECIDE WHETHER WEB SEARCH IS NEEDED
 # ============================================================
 
 def should_search_web(message: str) -> bool:
@@ -188,26 +177,15 @@ def should_search_web(message: str) -> bool:
         "news",
         "this week",
         "this month",
-        "this year",
         "2026",
         "price",
-        "prices",
         "version",
         "weather",
         "update",
-        "updates",
         "release",
         "released",
-        "new",
+        "newest",
         "now",
-        "currently",
-        "stock",
-        "score",
-        "live",
-        "ranking",
-        "rankings",
-        "schedule",
-        "event",
     ]
 
     message_lower = message.lower()
@@ -222,10 +200,7 @@ def should_search_web(message: str) -> bool:
 # CHAT ENDPOINT
 # ============================================================
 
-@router.post(
-    "/chat",
-    response_model=ChatResponse
-)
+@router.post("/chat", response_model=ChatResponse)
 def chat(payload: ChatRequest):
 
     # --------------------------------------------------------
@@ -233,7 +208,6 @@ def chat(payload: ChatRequest):
     # --------------------------------------------------------
 
     if not payload.message or not payload.message.strip():
-
         raise HTTPException(
             status_code=400,
             detail="message is required"
@@ -255,18 +229,13 @@ def chat(payload: ChatRequest):
         )
 
     # --------------------------------------------------------
-    # WEB SEARCH
+    # Web search
     # --------------------------------------------------------
 
     web_context = ""
     sources = []
 
     if should_search_web(payload.message):
-
-        print("=================================")
-        print("WEB SEARCH TRIGGERED")
-        print("Query:", payload.message)
-        print("=================================")
 
         try:
 
@@ -275,73 +244,44 @@ def chat(payload: ChatRequest):
             if results:
 
                 web_context = (
-                    "\n\n"
-                    "IMPORTANT: The following information was "
-                    "retrieved from the web using Tavily. "
-                    "Use it to answer the student's question. "
-                    "Do not say that you personally searched the web.\n\n"
+                    "\n\nWEB SEARCH RESULTS:\n"
+                    "Use these results to answer the question "
+                    "with current information.\n"
                 )
 
-                for i, result in enumerate(
-                    results,
-                    start=1
-                ):
+                for i, result in enumerate(results, 1):
 
-                    title = result.get(
-                        "title",
-                        ""
-                    )
+                    title = result.get("title", "")
+                    url = result.get("url", "")
+                    content = result.get("content", "")
 
-                    url = result.get(
-                        "url",
-                        ""
-                    )
-
-                    content = result.get(
-                        "content",
-                        ""
-                    )
-
-                    web_context += (
-                        f"Source {i}:\n"
-                        f"Title: {title}\n"
-                        f"URL: {url}\n"
-                        f"Content: {content}\n\n"
-                    )
-
-                    # Return source information to frontend
-                    if title and url:
+                    # Save source for frontend
+                    if url:
 
                         sources.append(
                             {
-                                "title": title,
-                                "url": url
+                                "title": title or "Web source",
+                                "url": url,
                             }
                         )
 
-            else:
-
-                print("Tavily returned no results.")
+                    web_context += (
+                        f"\nSource {i}:\n"
+                        f"Title: {title}\n"
+                        f"URL: {url}\n"
+                        f"Content: {content}\n"
+                    )
 
         except Exception as exc:
 
-            print("=================================")
+            print("================================")
             print("WEB SEARCH FAILED")
             print(type(exc))
             print(exc)
-            print("=================================")
+            print("================================")
 
-            # Do not stop Nova completely if Tavily fails.
+            # Do not completely break chat if web search fails
             web_context = ""
-
-    # --------------------------------------------------------
-    # Build message for Gemini
-    # --------------------------------------------------------
-
-    message_for_gemini = (
-        payload.message
-        + web_context
-    )
 
     # --------------------------------------------------------
     # Send request to Gemini
@@ -350,12 +290,11 @@ def chat(payload: ChatRequest):
     try:
 
         response = client.models.generate_content(
-
             model=GEMINI_MODEL,
 
             contents=_to_gemini_contents(
                 payload.history,
-                message_for_gemini
+                payload.message + web_context
             ),
 
             config=types.GenerateContentConfig(
@@ -370,7 +309,6 @@ def chat(payload: ChatRequest):
         traceback.print_exc()
 
         print("================================")
-        print("GEMINI ERROR")
         print(type(exc))
         print(exc)
         print("================================")
@@ -384,13 +322,7 @@ def chat(payload: ChatRequest):
     # Get Gemini response
     # --------------------------------------------------------
 
-    reply = (
-        response.text or ""
-    ).strip()
-
-    # --------------------------------------------------------
-    # Check empty response
-    # --------------------------------------------------------
+    reply = (response.text or "").strip()
 
     if not reply:
 
