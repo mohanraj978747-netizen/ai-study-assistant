@@ -42,12 +42,16 @@ export default function Chat() {
         setConversations(convos);
 
         if (convos.length > 0) {
-          setActiveId(convos[0]._id || convos[0].id);
+          setActiveId(
+            convos[0]._id || convos[0].id
+          );
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setError('Could not load your chat history.');
+          setError(
+            'Could not load your chat history.'
+          );
         }
       })
       .finally(() => {
@@ -75,6 +79,7 @@ export default function Chat() {
     let cancelled = false;
 
     setLoadingMessages(true);
+    setError('');
 
     chatService
       .getMessages(activeId)
@@ -85,7 +90,9 @@ export default function Chat() {
       })
       .catch(() => {
         if (!cancelled) {
-          setError('Could not load this conversation.');
+          setError(
+            'Could not load this conversation.'
+          );
         }
       })
       .finally(() => {
@@ -113,64 +120,82 @@ export default function Chat() {
 
 
   // ============================================================
-  // CREATE CONVERSATION
+  // CREATE NEW CONVERSATION
   // ============================================================
 
-  const handleCreateConversation = useCallback(async () => {
-    try {
-      const convo = await chatService.createConversation();
+  const handleCreateConversation = useCallback(
+    async () => {
+      try {
+        setError('');
 
-      setConversations((prev) => [
-        convo,
-        ...prev,
-      ]);
+        const convo =
+          await chatService.createConversation();
 
-      setActiveId(convo._id || convo.id);
-      setMessages([]);
-      setMobileSidebarOpen(false);
+        setConversations((prev) => [
+          convo,
+          ...prev,
+        ]);
 
-    } catch {
-      setError('Could not start a new chat right now.');
-    }
-  }, []);
+        setActiveId(
+          convo._id || convo.id
+        );
+
+        setMessages([]);
+
+        setMobileSidebarOpen(false);
+      } catch {
+        setError(
+          'Could not start a new chat right now.'
+        );
+      }
+    },
+    []
+  );
 
 
   // ============================================================
   // SELECT CONVERSATION
   // ============================================================
 
-  const handleSelectConversation = useCallback((id) => {
-    setActiveId(id);
-    setMobileSidebarOpen(false);
-  }, []);
+  const handleSelectConversation =
+    useCallback((id) => {
+      setActiveId(id);
+      setMobileSidebarOpen(false);
+      setError('');
+    }, []);
 
 
   // ============================================================
   // DELETE CONVERSATION
   // ============================================================
 
-  const handleDeleteConversation = useCallback(
-    async (id) => {
-      try {
-        await chatService.deleteConversation(id);
+  const handleDeleteConversation =
+    useCallback(
+      async (id) => {
+        try {
+          setError('');
 
-        setConversations((prev) =>
-          prev.filter(
-            (c) => (c._id || c.id) !== id
-          )
-        );
+          await chatService.deleteConversation(id);
 
-        if (activeId === id) {
-          setActiveId(null);
-          setMessages([]);
+          setConversations((prev) =>
+            prev.filter(
+              (c) =>
+                (c._id || c.id) !== id
+            )
+          );
+
+          if (activeId === id) {
+            setActiveId(null);
+            setMessages([]);
+          }
+        } catch {
+          setError(
+            'Could not delete that conversation.'
+          );
         }
-
-      } catch {
-        setError('Could not delete that conversation.');
-      }
-    },
-    [activeId]
-  );
+      },
+      [activeId]
+    );
 
 
   // ============================================================
@@ -182,7 +207,9 @@ export default function Chat() {
 
     const text = input.trim();
 
-    if (!text || sending) return;
+    if (!text || sending) {
+      return;
+    }
 
     let conversationId = activeId;
 
@@ -213,7 +240,7 @@ export default function Chat() {
 
 
       // --------------------------------------------------------
-      // Optimistically display user message
+      // Optimistically show user message
       // --------------------------------------------------------
 
       const userMessage = {
@@ -232,7 +259,7 @@ export default function Chat() {
 
 
       // --------------------------------------------------------
-      // Send to backend
+      // Send message to backend
       // --------------------------------------------------------
 
       const reply =
@@ -244,7 +271,15 @@ export default function Chat() {
 
       // --------------------------------------------------------
       // Add Nova response
-      // Includes sources returned by Tavily
+      //
+      // reply contains:
+      //
+      // {
+      //   role: 'assistant',
+      //   content: '...',
+      //   sources: [...]
+      // }
+      //
       // --------------------------------------------------------
 
       setMessages((prev) => [
@@ -254,7 +289,10 @@ export default function Chat() {
 
     } catch (err) {
 
-      console.error('Chat error:', err);
+      console.error(
+        'Chat send error:',
+        err
+      );
 
       setError(
         'Your tutor could not respond just now. Please try again.'
@@ -275,7 +313,7 @@ export default function Chat() {
 
       {/* ======================================================
           DESKTOP SIDEBAR
-      ====================================================== */}
+      ======================================================= */}
 
       <div className="hidden w-72 shrink-0 border-r border-white/10 lg:block">
 
@@ -303,15 +341,12 @@ export default function Chat() {
 
       {/* ======================================================
           MOBILE SIDEBAR
-      ====================================================== */}
+      ======================================================= */}
 
       <AnimatePresence>
 
         {mobileSidebarOpen && (
           <>
-
-            {/* Overlay */}
-
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -321,9 +356,6 @@ export default function Chat() {
               }
               className="fixed inset-0 z-40 bg-black/60 lg:hidden"
             />
-
-
-            {/* Drawer */}
 
             <motion.div
               initial={{ x: '-100%' }}
@@ -350,7 +382,6 @@ export default function Chat() {
 
               </div>
 
-
               <ChatSidebar
                 conversations={conversations}
                 activeId={activeId}
@@ -361,7 +392,6 @@ export default function Chat() {
               />
 
             </motion.div>
-
           </>
         )}
 
@@ -370,14 +400,14 @@ export default function Chat() {
 
       {/* ======================================================
           CHAT AREA
-      ====================================================== */}
+      ======================================================= */}
 
       <div className="flex min-w-0 flex-1 flex-col">
 
 
         {/* ====================================================
             HEADER
-        ==================================================== */}
+        ===================================================== */}
 
         <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3 lg:px-6">
 
@@ -390,7 +420,6 @@ export default function Chat() {
           >
             <Menu size={20} />
           </button>
-
 
           <div>
 
@@ -409,12 +438,14 @@ export default function Chat() {
 
         {/* ====================================================
             MESSAGES
-        ==================================================== */}
+        ===================================================== */}
 
         <div
           ref={scrollRef}
           className="flex-1 space-y-4 overflow-y-auto px-4 py-6 lg:px-6"
         >
+
+          {/* Loading messages */}
 
           {loadingMessages ? (
 
@@ -422,7 +453,10 @@ export default function Chat() {
               <Loader size="sm" />
             </div>
 
+
           ) : messages.length === 0 ? (
+
+            /* Empty chat */
 
             <div className="flex h-full flex-col items-center justify-center text-center">
 
@@ -431,25 +465,35 @@ export default function Chat() {
               </p>
 
               <p className="mt-1.5 max-w-xs text-sm text-slate-500">
-                Ask a question, paste a tricky problem, or bring up one of your uploaded notes.
+                Ask a question, paste a tricky problem,
+                or bring up one of your uploaded notes.
               </p>
 
             </div>
 
+
           ) : (
+
+            /* Messages */
 
             messages.map((m, i) => (
 
               <ChatBubble
-                key={m._id || m.id || i}
+                key={
+                  m._id ||
+                  m.id ||
+                  i
+                }
 
                 role={m.role}
 
-                content={m.content}
+                content={
+                  m.content
+                }
 
-                {/* 🔎 IMPORTANT:
-                    Pass Tavily sources to ChatBubble */}
-                sources={m.sources || []}
+                sources={
+                  m.sources || []
+                }
 
                 timestamp={
                   m.createdAt
@@ -473,25 +517,29 @@ export default function Chat() {
 
           {/* Typing indicator */}
 
-          {sending && <TypingIndicator />}
+          {sending && (
+            <TypingIndicator />
+          )}
 
         </div>
 
 
         {/* ====================================================
             ERROR
-        ==================================================== */}
+        ===================================================== */}
 
         {error && (
+
           <p className="px-4 pb-2 text-xs text-rose-400 lg:px-6">
             {error}
           </p>
+
         )}
 
 
         {/* ====================================================
             INPUT
-        ==================================================== */}
+        ===================================================== */}
 
         <form
           onSubmit={handleSend}
@@ -513,7 +561,9 @@ export default function Chat() {
                   e.key === 'Enter' &&
                   !e.shiftKey
                 ) {
+
                   e.preventDefault();
+
                   handleSend(e);
                 }
 
@@ -526,11 +576,16 @@ export default function Chat() {
               className="max-h-32 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-parchment outline-none placeholder:text-slate-500"
             />
 
-
             <button
               type="submit"
-              disabled={!input.trim() || sending}
+
+              disabled={
+                !input.trim() ||
+                sending
+              }
+
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-amber-500 to-indigo-500 text-white transition-opacity disabled:opacity-40"
+
               aria-label="Send message"
             >
               <Send size={16} />
